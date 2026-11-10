@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>leon</title>
+<body style="margin:0;background:#16244A;color:#fff;font:14px sans-serif"><div id="out" style="display:grid;grid-template-columns:repeat(9,1fr);gap:4px;padding:6px"></div>
+<script type="module">
+import { drawLeon } from '../src/guide.js';
+const poses = ['idle', 'open', 'smile', 'brow', 'eyes', 'kiss', 'tilt', 'turn', 'peek'];
+for (const t of [0.98, 0.3]) for (const p of poses) {
+  const c = document.createElement('canvas'); c.width = 240; c.height = 240; c.style.cssText = 'width:100%;background:#1d2f5e;border-radius:50%';
+  drawLeon(c.getContext('2d'), 240, p, t);
+  const d = document.createElement('div'); d.append(c, p); document.getElementById('out').append(d);
+}
+window.__done = true;
+</script>

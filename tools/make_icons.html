@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>icons</title><body style="margin:0;background:#333">
+<script type="module">
+import { itemById } from '../src/items.js';
+import { renderThumb } from '../src/draw.js';
+const it = itemById('trex');
+const bg = (g, W, H) => {
+  const gr = g.createRadialGradient(W * 0.5, H * 0.3, W * 0.05, W * 0.5, H * 0.5, W * 0.8);
+  gr.addColorStop(0, '#4E8DF2'); gr.addColorStop(0.6, '#1E4FB8'); gr.addColorStop(1, '#0B1D4A');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+};
+function icon(px, s, y) {
+  const keep = it.thumb; it.thumb = { s, y };
+  const c = renderThumb(it, px, bg); it.thumb = keep;
+  c.style.cssText = 'width:200px;margin:4px'; document.body.append(c);
+  return c.toDataURL('image/png');
+}
+window.__out = { 'icon-192.png': icon(192, 0.34, 0.08), 'icon-512.png': icon(512, 0.34, 0.08), 'icon-512-maskable.png': icon(512, 0.26, 0.06) };
+window.__done = true;
+</script>

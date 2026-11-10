@@ -1,0 +1,58 @@
+<!doctype html><meta charset="utf-8"><title>scene</title><body style="margin:0;background:#222">
+<script type="module">
+import { FilesetResolver, ImageSegmenter } from '../vendor/mediapipe/vision_bundle.js';
+const W = 720, H = 1280;
+const fileset = await FilesetResolver.forVisionTasks('../vendor/mediapipe');
+const seg = await ImageSegmenter.createFromOptions(fileset, { baseOptions: { modelAssetPath: '../models/selfie_segmenter.tflite', delegate: 'CPU' }, runningMode: 'IMAGE', outputConfidenceMasks: true, outputCategoryMask: false });
+async function person(name) {              // 顔画像を切り抜き、肩から下を引きのばして体を足す
+  const img = new Image(); img.src = '../testdata/gen/' + name + '.jpg'; await img.decode();
+  const n = 512, src = document.createElement('canvas'); src.width = n; src.height = n; src.getContext('2d').drawImage(img, 0, 0, n, n);
+  let mc;
+  seg.segment(src, (res) => {
+    const m = res.confidenceMasks[0], arr = m.getAsFloat32Array(), id = new ImageData(m.width, m.height);
+    for (let i = 0; i < arr.length; i++) { let t = (arr[i] - 0.35) * 3; t = Math.max(0, Math.min(1, t)); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = 255; id.data[i * 4 + 3] = t * 255; }
+    mc = document.createElement('canvas'); mc.width = m.width; mc.height = m.height; mc.getContext('2d').putImageData(id, 0, 0);
+  });
+  const cut = document.createElement('canvas'); cut.width = n; cut.height = n; const cg = cut.getContext('2d');
+  cg.drawImage(mc, 0, 0, n, n); cg.globalCompositeOperation = 'source-in'; cg.drawImage(src, 0, 0);
+  const out = document.createElement('canvas'); out.width = n * 1.6; out.height = n * 1.9; const og = out.getContext('2d');
+  const ox = n * 0.3;
+  // 服の色を 肩のあたりから ひろう
+  const d = cg.getImageData(0, Math.round(n * 0.95), n, Math.round(n * 0.04)).data; let r = 0, gg = 0, b = 0, cnt = 0;
+  for (let i = 0; i < d.length; i += 4) { const x = (i / 4) % n; if (d[i + 3] > 200 && (x < n * 0.3 || x > n * 0.7)) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; cnt++; } }
+  const col = cnt > 50 ? `rgb(${r / cnt | 0},${gg / cnt | 0},${b / cnt | 0})` : 'rgb(96,120,160)';
+  // いちばん下の行で 体の左右のはしを さがし、そこから なだらかに 体を のばす
+  const row = cg.getImageData(0, Math.round(n * 0.975), n, 1).data; let xl = n * 0.5, xr = n * 0.5;
+  for (let x = 0; x < n; x++) if (row[x * 4 + 3] > 128) { xl = Math.min(xl, x); xr = Math.max(xr, x); }
+  og.fillStyle = col;
+  og.beginPath(); og.moveTo(ox + xl, n * 0.97); og.bezierCurveTo(ox + xl - n * 0.1, n * 1.02, ox + xl - n * 0.16, n * 1.15, ox + xl - n * 0.17, n * 1.4); og.lineTo(ox + xl - n * 0.18, n * 1.9); og.lineTo(ox + xr + n * 0.18, n * 1.9); og.lineTo(ox + xr + n * 0.17, n * 1.4); og.bezierCurveTo(ox + xr + n * 0.16, n * 1.15, ox + xr + n * 0.1, n * 1.02, ox + xr, n * 0.97); og.closePath(); og.fill();
+  const sh = og.createLinearGradient(0, n, 0, n * 1.9); sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.18)'); og.fillStyle = sh; og.fill();
+  og.drawImage(cut, ox, 0);
+  return { c: out, ox, n };
+}
+function room(g, tone) {
+  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, tone[0]); gr.addColorStop(1, tone[1]); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(430, 120, 230, 300); g.fillStyle = 'rgba(120,150,190,.35)'; g.fillRect(445, 135, 200, 270);
+  g.fillStyle = 'rgba(90,70,50,.35)'; g.fillRect(0, 760, W, 14); g.fillStyle = 'rgba(60,120,80,.5)'; g.beginPath(); g.ellipse(90, 700, 70, 110, 0, 0, 7); g.fill();
+}
+// faceW: 顔の横幅の目安(画素)。顔は元画像の幅の約 0.56
+async function put(g, name, cx, cyFace, faceW) {
+  const p = await person(name), k = faceW / (p.n * 0.56);
+  g.drawImage(p.c, cx - (p.ox + p.n / 2) * k, cyFace - p.n * 0.5 * k, p.c.width * k, p.c.height * k);
+}
+const scenes = {
+  solo: async (g) => { room(g, ['#d8d0c4', '#b7ad9f']); await put(g, 'g3', 360, 430, 300); },
+  duo: async (g) => { room(g, ['#cfd6dc', '#a9b3bd']); await put(g, 'g11', 235, 340, 240); await put(g, 'g21', 500, 640, 185); },
+  kid: async (g) => { room(g, ['#e3d9c6', '#c2b59e']); await put(g, 'g14', 360, 470, 290); },
+  duo2: async (g) => { room(g, ['#d9d2e0', '#b3a9bd']); await put(g, 'g9', 250, 360, 235); await put(g, 'g16', 510, 620, 180); },
+  turn: async (g) => { room(g, ['#d0d8cf', '#a8b3a6']); await put(g, 'g2', 360, 430, 290); },
+  glasses: async (g) => { room(g, ['#dcd3c9', '#b4a898']); await put(g, 'g25', 360, 440, 300); },
+};
+window.__out = {};
+for (const [name, fn] of Object.entries(scenes)) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H; c.style.cssText = 'width:180px;margin:2px'; document.body.append(c);
+  await fn(c.getContext('2d'));
+  window.__out[name] = c.toDataURL('image/png');
+}
+window.__done = true;
+</script>

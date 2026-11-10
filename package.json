@@ -1,0 +1,15 @@
+{
+  "name": "narikiri-camera",
+  "version": "0.1.1",
+  "private": true,
+  "description": "親子で遊べる ARカメラ(Webアプリ)。映像は端末の中だけで処理する。",
+  "scripts": {
+    "dev": "node tools/serve.cjs 8765 .",
+    "test:items": "node tools/run_app.cjs solo tools/scripts/items.cjs out/items",
+    "test:flows": "node tools/run_app.cjs solo tools/scripts/flows.cjs out/flows",
+    "icons": "node tools/dump.cjs tools/make_icons.html icons"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

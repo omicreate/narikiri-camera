@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>gallery</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
+<body style="margin:0;background:#1b2233;color:#fff;font:14px 'Zen Maru Gothic',sans-serif">
+<div id="out" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:6px"></div>
+<script type="module">
+import { ITEMS } from '../src/items.js';
+import { WORLDS } from '../src/worlds.js';
+import { renderThumb } from '../src/draw.js';
+const q = new URLSearchParams(location.search), px = +(q.get('px') || 300), open = +(q.get('open') || 0), bg = q.get('bg') !== '0';
+const only = q.get('only');
+try { await document.fonts.load('900 20px "Zen Maru Gothic"', '119'); } catch (e) {}
+for (const it of ITEMS) {
+  if (only && !only.split(',').includes(it.id)) continue;
+  const d = document.createElement('div');
+  const c = renderThumb(it, px, bg ? WORLDS[it.world] : null, open);
+  c.style.cssText = 'width:100%;border-radius:10px;background:#8aa';
+  d.append(c, Object.assign(document.createElement('div'), { textContent: it.name + ' / ' + it.id }));
+  document.getElementById('out').append(d);
+}
+window.__done = true;
+</script>

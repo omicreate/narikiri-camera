@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>なりきりカメラ</title>
+<meta name="description" content="カメラにうつると、きょうりゅうや どうぶつ、のりもの、おしごとに へんしん。おやこで あそべる ARカメラ。">
+<meta name="theme-color" content="#070C1A">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app" data-screen="home" data-mode="play">
+
+  <!-- はじめの画面 -->
+  <section id="home" class="screen">
+    <div class="home-in">
+      <p class="eyebrow">おやこで あそぶ ARカメラ</p>
+      <h1 class="title">なりきり<span>カメラ</span></h1>
+      <div id="hero" class="hero" aria-hidden="true"></div>
+      <p class="lead">カメラに うつると へんしん!<br>きょうりゅう・どうぶつ・のりもの・おしごと</p>
+      <div class="home-btns">
+        <button id="start" class="btn primary big" type="button">はじめる</button>
+        <button id="usePhoto" class="btn ghost" type="button">しゃしんで あそぶ</button>
+      </div>
+      <details class="grown">
+        <summary>おとなの方へ</summary>
+        <ul>
+          <li>カメラの映像は、この端末の中だけで処理します。写真や映像を外部へ送信しません。</li>
+          <li>撮った写真は「ほぞん」を押したときだけ、この端末に保存されます。</li>
+          <li>はじめに顔認識の部品(約20MB)を読み込みます。Wi-Fi での利用をおすすめします。</li>
+          <li>口を大きくあける・画面をタッチする と、音や動きが出ます。</li>
+          <li>顔の認識には MediaPipe(Google, Apache License 2.0)、文字には Zen Maru Gothic(SIL Open Font License)を使っています。</li>
+        </ul>
+      </details>
+    </div>
+  </section>
+
+  <!-- カメラの画面 -->
+  <section id="stage" class="screen" hidden>
+    <canvas id="view" aria-label="カメラの映像"></canvas>
+
+    <header class="top">
+      <button id="back" class="icon" type="button" aria-label="さいしょの画面に もどる">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="seg" role="tablist" aria-label="あそびかた">
+        <button id="modePlay" type="button" role="tab" aria-selected="true">なりきり</button>
+        <button id="modeGame" type="button" role="tab" aria-selected="false">まねっこ</button>
+      </div>
+      <div class="top-r">
+        <button id="world" class="icon" type="button" aria-pressed="true" aria-label="はいけいを かえる">
+          <svg viewBox="0 0 24 24"><path d="M2.5 19l6-9.5 4 6 2.6-3.6 6.4 7.1z"/><circle cx="17" cy="6.5" r="2.2"/></svg>
+        </button>
+        <button id="sound" class="icon" type="button" aria-pressed="true" aria-label="おと">
+          <svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path class="wave" d="M16.5 8.5a5 5 0 010 7"/><path class="wave" d="M19 6a8.5 8.5 0 010 12"/><path class="mute" d="M17 9.5l4 5m0-5l-4 5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- まねっこ: おてほん -->
+    <div id="hud" class="hud" hidden>
+      <div class="hud-card">
+        <div class="hud-leon"><canvas id="leon" width="216" height="216"></canvas></div>
+        <div class="hud-text">
+          <p id="prompt" class="prompt">まねっこ できるかな?</p>
+          <div id="dots" class="dots" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="hint" class="hint" hidden></div>
+
+    <footer class="dock">
+      <div class="actions">
+        <button id="pick" class="icon lg" type="button" aria-label="しゃしんを えらぶ">
+          <svg class="i-photo" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.7"/><path d="M20.5 15l-5-5-9 9.5"/></svg>
+          <svg class="i-cam" viewBox="0 0 24 24"><path d="M4 8h3.2l1.8-2.6h6L16.8 8H20v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>
+        </button>
+        <button id="shutter" class="shutter" type="button" aria-label="しゃしんを とる"><span></span></button>
+        <button id="flip" class="icon lg" type="button" aria-label="カメラを きりかえる">
+          <svg viewBox="0 0 24 24"><path d="M20 5v5h-5"/><path d="M4 19v-5h5"/><path d="M19.4 10A7.6 7.6 0 006 7.6L4 10"/><path d="M4.6 14A7.6 7.6 0 0018 16.4l2-2.4"/></svg>
+        </button>
+      </div>
+      <div class="tray">
+        <nav id="cats" class="cats" aria-label="しゅるい"></nav>
+        <div id="items" class="items"></div>
+      </div>
+    </footer>
+
+    <div id="flash" class="flash"></div>
+
+    <!-- じゅんび中 -->
+    <div id="loading" class="overlay" hidden>
+      <div class="load-in">
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="load-t">じゅんびちゅう…</p>
+        <div class="bar"><i id="loadBar"></i></div>
+        <p id="loadStep" class="load-s">カメラを よびだしています</p>
+      </div>
+    </div>
+
+    <!-- こまったとき -->
+    <div id="error" class="overlay" hidden>
+      <div class="card">
+        <h2 id="errTitle">カメラが つかえませんでした</h2>
+        <p id="errText"></p>
+        <div class="row">
+          <button id="errRetry" class="btn primary" type="button">もういちど</button>
+          <button id="errPhoto" class="btn ghost" type="button">しゃしんで あそぶ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- まねっこ: はじめる前 -->
+    <div id="gameIntro" class="overlay soft" hidden>
+      <div class="card center">
+        <canvas id="leonBig" width="300" height="300"></canvas>
+        <h2>まねっこ ゲーム</h2>
+        <p>カメレオンの レオンと おなじ かおを してね。<br>5つ できるかな?</p>
+        <div class="row">
+          <button id="gameStart" class="btn primary big" type="button">スタート</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- とった しゃしん -->
+    <div id="sheet" class="overlay" hidden>
+      <div class="card center">
+        <h2 id="sheetTitle">とれたよ!</h2>
+        <div id="stars" class="stars" hidden></div>
+        <img id="shot" alt="とった しゃしん">
+        <div class="row">
+          <button id="again" class="btn ghost" type="button">もどる</button>
+          <button id="save" class="btn primary" type="button">
+            <svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>ほぞん
+          </button>
+          <button id="share" class="btn ghost" type="button" hidden>
+            <svg viewBox="0 0 24 24"><path d="M12 15V4"/><path d="M8 8l4-4 4 4"/><path d="M5 12v7h14v-7"/></svg>おくる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <div id="fps" class="fps" hidden></div>
+  </section>
+</main>
+
+<video id="cam" playsinline muted></video>
+<input id="file" type="file" accept="image/*" hidden>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
