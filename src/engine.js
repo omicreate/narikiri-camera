@@ -22,7 +22,7 @@ export class Engine {
     this.safe = { top: 0, bottom: 0, right: 0 };   // 操作の部品で かくれる幅(CSS px)。構図と写真の切り出しに使う
     this.fr = { k: 1, tx: 0, ty: 0 };              // 構図の調整(拡大率と ずらし量)。背景を変えているときだけ働く
     this.views = [];
-    this.t = 0; this.frameNo = 0; this.segEvery = 1;
+    this.t = 0; this.frameNo = 0; this.segEvery = 1; this.freshNo = 0;
     this.scroll = 0; this.boostV = 0; this.spin = 0;
     this.shakeAmp = 0; this.shakeEnd = 0; this.shakeDur = 1;
     this.lastWord = -9; this.lastVT = -1; this.photoN = 0; this.photoAt = 0;
@@ -109,8 +109,10 @@ export class Engine {
       const wantSeg = this.worldOn && this.item && WORLDS[this.item.world];
       if (fresh && src.w) {
         tk.detect(src.el, src.w, src.h, now);
-        if (wantSeg && (src.kind === 'photo' || this.frameNo % this.segEvery === 0)) tk.segment(src.el, now);
-      } else if (src.kind === 'photo' && wantSeg && !tk.hasMask) tk.segment(src.el, now);
+        if (src.kind === 'photo') { if (wantSeg) tk.segment(src.el, now, tk.tracks.length > 0); }
+        // 間引きは「新しいコマ」の数で数える(画面の更新回数で数えると、カメラの周期と かみ合って 一度も切り抜かないことがある)
+        else if (wantSeg && this.freshNo++ % this.segEvery === 0) tk.segment(src.el, now, tk.tracks.some((tr) => now - tr.seen < 120));
+      } else if (src.kind === 'photo' && wantSeg && !tk.hasMask) tk.segment(src.el, now, tk.tracks.length > 0);
     }
     this.frameNo++;
     this._views(now, dt);

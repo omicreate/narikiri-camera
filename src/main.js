@@ -21,8 +21,10 @@ const S = {
   cat: 'dino', item: null, mode: 'play', facing: 'user', stream: null, lastKind: 'camera',
   ml: null, mlReady: false, cpuTried: false, running: false, raf: 0, lastNow: 0,
   lastTrig: 0, pickedAt: 0, noFaceSince: 0, hintText: '', blob: null, blobName: '', blobUrl: '', sheetGame: false,
-  fpsT: 0, fpsN: 0,
+  fpsT: 0, fpsN: 0, segBroken: false, segToldAt: -1e9,
 };
+const NO_WORLD = 'はいけいは かえずに あそべます';
+const VERSION = '0.1.2';   // package.json と そろえる。「おとなの方へ」の末尾に出す(どの版が動いているかの確認用)
 
 const thumbs = new Map();
 const thumbOf = (it) => { if (!thumbs.has(it.id)) thumbs.set(it.id, renderThumb(it, 168, WORLDS[it.world])); return thumbs.get(it.id); };
@@ -168,7 +170,8 @@ async function usePhoto(file) {
 
 function ensureML(prefer) {
   if (!S.ml) {
-    S.ml = engine.tracker.init(prefer || q.get('delegate') || 'GPU', loadStep)
+    // ?delegate=CPU で 顔の追跡も CPU に、?seg=GPU で 切り抜きを GPU に 切りかえられる(調べるとき用)
+    S.ml = engine.tracker.init(prefer || q.get('delegate') || 'GPU', loadStep, q.get('seg') || 'CPU')
       .then(() => { S.mlReady = true; })
       .catch((e) => { S.ml = null; e.name = 'MLError'; throw e; });
   }
@@ -221,6 +224,12 @@ function tick(now) {
     engine.tracker.close();
     ensureML('CPU').catch((e) => showError(e));
   }
+  const sb = engine.tracker.segBroken;
+  if (sb !== S.segBroken) {   // 切り抜きが働かない映像では、背景を変えずに カメラをそのまま映す
+    S.segBroken = sb;
+    $('world').setAttribute('aria-pressed', String(!sb && engine.worldOn));
+    if (sb && now - S.segToldAt > 30000) { S.segToldAt = now; toast(NO_WORLD); }
+  }
   if (game.active) { game.update(dt); drawLeon(leonG, 216, game.pose.id, now / 1000); }
   else if (!$('gameIntro').hidden) drawLeon(leonBigG, 300, INTRO_POSES[Math.floor(now / 1900) % INTRO_POSES.length], now / 1000);
   updateHint(now);
@@ -233,7 +242,7 @@ function showFps(now) {
   const fps = (S.fpsN * 1000) / (now - S.fpsT); S.fpsT = now; S.fpsN = 0;
   const tk = engine.tracker, el = $('fps');
   el.hidden = false;
-  el.textContent = `${fps.toFixed(0)}fps ${engine.W}x${engine.H} ${tk.delegate || '-'}\nface ${tk.stats.face.toFixed(0)}ms seg ${tk.stats.seg.toFixed(0)}ms/${engine.segEvery} n=${engine.views.length}`;
+  el.textContent = `v${VERSION} ${fps.toFixed(0)}fps ${engine.W}x${engine.H} ${tk.delegate || '-'}\nface ${tk.stats.face.toFixed(0)}ms seg ${tk.stats.seg.toFixed(0)}ms/${engine.segEvery} ${tk.segDelegate || '-'} n=${engine.views.length}\nmask ${tk.segBroken ? 'x' : tk.hasMask ? 'ok' : '-'} ${tk.maskMax.toFixed(2)} q${engine.quality.toFixed(1)}`;
 }
 
 function overlayOpen() { return !$('sheet').hidden || !$('loading').hidden || !$('error').hidden; }
@@ -344,6 +353,7 @@ $('modePlay').addEventListener('click', () => { sound.play('tick'); setMode('pla
 $('modeGame').addEventListener('click', () => { sound.play('tick'); setMode('game'); });
 $('gameStart').addEventListener('click', () => { sound.unlock(); startGame(); });
 $('world').addEventListener('click', (ev) => {
+  if (engine.tracker.segBroken) { toast(NO_WORLD); return; }
   const on = ev.currentTarget.getAttribute('aria-pressed') !== 'true';
   ev.currentTarget.setAttribute('aria-pressed', String(on));
   engine.setWorld(on); sound.play('tick');
@@ -387,6 +397,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- はじまり ----------
+$('ver').textContent = VERSION;
 buildCats();
 setCat('dino', false);
 selectItem(itemById(q.get('item') || 'trex'), false);

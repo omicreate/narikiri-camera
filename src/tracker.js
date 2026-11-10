@@ -34,10 +34,18 @@ export class Tracker {
     this.tsSeg = 0;
     this.errors = 0;
     this.broken = false;
+    this.segDelegate = null;
+    this.maskMax = 0;        // いちばん新しい切り抜き結果の 最大値(人物らしさ 0〜1)
+    this.deadRuns = 0;       // 「顔は見えているのに 切り抜きが空」が 続いた回数
+    this.segBroken = false;  // true の間は 切り抜きを あきらめる(背景は変えず、カメラをそのまま映す)
+    this.probeAt = -1e9;     // 最後に 切り抜きを試した時刻
   }
 
-  // prefer: 'GPU' なら GPU→CPU の順に試す
-  async init(prefer = 'GPU', onStep = () => {}) {
+  // prefer: 顔の追跡に使う側。'GPU' なら GPU→CPU の順に試す。
+  // segPrefer: 人物の切り抜きに使う側。既定は CPU。
+  //   GPU だと、結果を読み戻す処理(readPixels の RED/FLOAT)が スマホの一部の GPU で 空になり、
+  //   人物が まるごと消える(なりきりだけが 浮いて見える)。CPU なら 読み戻しが要らない。
+  async init(prefer = 'GPU', onStep = () => {}, segPrefer = 'CPU') {
     onStep(1);
     const fileset = await FilesetResolver.forVisionTasks(WASM);
     const order = prefer === 'CPU' ? ['CPU'] : ['GPU', 'CPU'];
@@ -56,15 +64,27 @@ export class Tracker {
           outputFacialTransformationMatrixes: true,
         });
         onStep(3);
-        this.seg = await ImageSegmenter.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: SEG_MODEL, delegate },
-          runningMode: 'VIDEO',
-          outputCategoryMask: false,
-          outputConfidenceMasks: true,
-        });
+        const segOrder = delegate === 'CPU' || segPrefer !== 'GPU' ? ['CPU'] : ['GPU', 'CPU'];
+        let segErr = null;
+        this.seg = null;
+        for (const sd of segOrder) {
+          try {
+            this.seg = await ImageSegmenter.createFromOptions(fileset, {
+              baseOptions: { modelAssetPath: SEG_MODEL, delegate: sd },
+              runningMode: 'VIDEO',
+              outputCategoryMask: false,
+              outputConfidenceMasks: true,
+            });
+            this.segDelegate = sd;
+            break;
+          } catch (e) { segErr = e; }
+        }
+        if (!this.seg) throw segErr || new Error('segmenter init failed');
         this.delegate = delegate;
         this.errors = 0;
         this.broken = false;
+        this.deadRuns = 0;
+        this.segBroken = false;
         return delegate;
       } catch (e) {
         lastErr = e;
@@ -85,6 +105,8 @@ export class Tracker {
     this.tracks = [];
     this.hasMask = false;
     this.maskPrev = null;
+    this.deadRuns = 0;
+    this.segBroken = false;   // 映像が変わったら 切り抜きを もういちど試す
   }
 
   _err(e) {
@@ -191,8 +213,11 @@ export class Tracker {
   }
 
   // 人物の切り抜きマスクを更新する。maskCanvas のアルファに人物らしさが入る
-  segment(src, now) {
+  // facePresent: いまのコマで 顔が見つかっているか(切り抜きが こわれていないかの 見張りに使う)
+  segment(src, now, facePresent = false) {
     if (!this.seg) return;
+    if (this.segBroken && now - this.probeAt < 1500) return;   // あきらめている間は、ときどきだけ 試しなおす
+    this.probeAt = now;
     this.segInCtx.drawImage(src, 0, 0, SEG_N, SEG_N);
     this.tsSeg = Math.max(this.tsSeg + 1, Math.round(now));
     const t0 = performance.now();
@@ -202,6 +227,17 @@ export class Tracker {
         if (!masks || !masks.length) return;
         const m = masks[masks.length - 1];
         const w = m.width, h = m.height, arr = m.getAsFloat32Array();
+        let mx = 0;
+        for (let i = 0; i < arr.length; i += 7) if (arr[i] > mx) mx = arr[i];   // 間引いて 最大値を見る
+        this.maskMax = mx;
+        if (mx >= 0.2) { this.deadRuns = 0; this.segBroken = false; }   // 人物らしさが出た = 切り抜きは働いている
+        else if (facePresent || this.segBroken) {
+          // 顔は見えているのに 人物らしさが どこにも無い = 切り抜きが こわれている。
+          // 空のマスクは使わず(人物が消えてしまう)、カメラを そのまま映す側に倒す。6回 続いたら あきらめる(ときどき試しなおす)。
+          this.hasMask = false; this.maskPrev = null;
+          if (facePresent && ++this.deadRuns >= 6 && !this.segBroken) { this.segBroken = true; console.warn('[tracker] segmentation gives an empty mask; showing the camera as is'); }
+          return;
+        }
         if (!this.maskImg || this.maskImg.width !== w || this.maskImg.height !== h) {
           this.mask.width = w; this.mask.height = h;
           this.maskImg = this.maskCtx.createImageData(w, h);

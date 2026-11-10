@@ -1,6 +1,6 @@
 {
   "name": "narikiri-camera",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "親子で遊べる ARカメラ(Webアプリ)。映像は端末の中だけで処理する。",
   "scripts": {
